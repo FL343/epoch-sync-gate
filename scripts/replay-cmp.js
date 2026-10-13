@@ -20,7 +20,12 @@ function replay(cron, run, tag) {
   try { return JSON.parse(fs.readFileSync(path.join(out, 'replay-result.json'), 'utf8')); } catch (e) { return null; }
 }
 const norm = (j) => j && JSON.stringify({ v: j.verdict, keys: (j.keys || []).map((k) => k.key + ':' + k.processed).sort(), acc: (j.accounts || []).map((a) => JSON.stringify(a)).sort(), problems: j.problems });
-const watchLines = (j) => { const s = new Set(); if (j) for (const t of j.ticks || []) for (const l of t.lines || []) if (WATCH.test(l)) s.add(l.replace(/\d{6,}_\d+_\d+/g, 'KEY')); return [...s]; };
+// Durations are blanked too (2026-10-13, B020 rehearsal): the replay clock is "tick time + real time spent inside the cron
+// process", and the absent-seat grace is exactly one tick long, so whether a tick prints "grace 0s left, deferred" or has
+// already settled depends on milliseconds of run time, not on the series (the same game showed the line in A on one run and
+// in B on another; what settles is compared by norm() above and stayed the same).
+const watchNorm = (l) => l.replace(/\d{6,}_\d+_\d+/g, 'KEY').replace(/\b\d+(?:\.\d+)?(ms|s|min|h)\b/g, 'N$1');
+const watchLines = (j) => { const s = new Set(); if (j) for (const t of j.ticks || []) for (const l of t.lines || []) if (WATCH.test(l)) s.add(watchNorm(l)); return [...s]; };
 
 const res = { runs: 0, same: 0, changes: [], notes: [], noResult: [] };
 for (const run of fs.readdirSync(path.join(dir, 'in')).sort()) {
