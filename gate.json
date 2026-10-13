@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "deployedFrom": "2f2642a7618c61c187ef045f6474c83e7327ca2d",
+  "pins": {
+    "infra/workbench/land-verify.js": "30cc11d6bd9c3ecc6241c816f3f7c6e9ca4b6ade396f04889e347b9b8058293b",
+    "infra/workbench/land-rules.json": "da95f93f64e4cc926fed05bbee80f60ad3ff0c10577914fa870888b609e5e797",
+    "infra/workbench/land-keys.json": "de1e68bd3950252acbf44519d61f2cba120fb7a18337752abba89048af3fdc15",
+    "infra/workbench/es-common.js": "71ad251170916a728ad07f38d086fd86c658f461c8cbddc92cc059557fb588cf",
+    "infra/cloud-test/ci/cloud-rules.js": "d476bd91e06fc1d24855c901bf7fbe14f79e0bf6dddf12ac41cafe338e9630f0"
+  },
+  "logKey": "-----BEGIN PUBLIC KEY-----\nMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAsHbL6PXwFweGVI6KghR+\nMsih9+O7uVZF+J0p2A3vyT9YFRuXVWqbjQFIHfvYDod3vb9T95phFxbEW6SeXbYh\nrBcvjX4ArS+O7By7B4CbHRLtlHnRd5e+61ApvciLWAfAQj3WaRap1thUjtO+YxYy\nMyPOFu3e5a9VyzJHWzWcwj/c/Yc53AwUo6Qfa/bvjU3QsU6MhSfI7qkWQFCJsIAp\nGMyeq9jM8EnAWQRn0CxIyzfupmnfDvLo+VlR7sTpzkov5VrVj6ZVXRQJK2O37CRR\nkMzQwXOhCS2BRmPxHk5qr3v1u4E3ZVVdEP4/WkMVeKaxizz2fj0IydDIc8echnuf\nxqiboBRv1/XuJBgjnvCx4GZT1qwevqxWLV5eUYqFRs7bqyjgMm8lGAod0xAv6YZ3\nOWUU8QR7LTXkiZuzEI+dajUY/mdeXhaDRryFnDmDNFeU+ynhmvrkGGI4iRtpqCjC\ntN/+wCqSpZgxhDhjAag4rXsQySYmpX7ReDNmU/dv18cvAgMBAAE=\n-----END PUBLIC KEY-----\n"
+}

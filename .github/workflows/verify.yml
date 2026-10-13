@@ -1,0 +1,181 @@
+# verify - gated verify-and-push for one epoch-sync patch series.
+# Triggered only by workflow_dispatch from the verifier box (fine-grained token, this repo only). No schedule, no pull_request*,
+# no caches (a test job running untrusted code must not be able to poison anything a later job reads).
+#   fetch  : gate verdict must be es-wait (gate code pinned by gate.json); no batch code runs.
+#   test   : batch code runs as an unprivileged user without sudo; public log = counts; full logs sealed.
+#   shadow : dry mode - the would-be epoch-sync result is pushed here as shadow/<batch> for comparison.
+#   push   : push mode - waits for approval of environment "push" (required reviewer); only then the push key exists.
+name: verify
+run-name: "verify ${{ inputs.batch }} ${{ inputs.head }} ${{ inputs.mode }}"
+on:
+  workflow_dispatch:
+    inputs:
+      batch: { description: 'batch id (B123)', required: true, type: string }
+      pr: { description: 'merge-batch pull request number in the main repo', required: true, type: string }
+      head: { description: 'tested commit (40 hex)', required: true, type: string }
+      mode: { description: 'dry = shadow branch only, push = gated push', required: true, type: choice, options: [dry, push], default: dry }
+      master: { description: 'rehearsal only (dry): main-repo commit to evaluate against; empty = current master', required: false, type: string, default: '' }
+permissions: {}
+concurrency:
+  group: verify
+  cancel-in-progress: false
+jobs:
+  fetch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      series: ${{ steps.f.outputs.series }}
+      master: ${{ steps.f.outputs.master }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - id: f
+        env:
+          MAIN_REPO: ${{ secrets.MAIN_REPO }}
+          MAIN_READ: ${{ secrets.MAIN_READ }}
+          BATCH: ${{ inputs.batch }}
+          PR: ${{ inputs.pr }}
+          HEAD_SHA: ${{ inputs.head }}
+          MODE: ${{ inputs.mode }}
+          MASTER_IN: ${{ inputs.master }}
+        run: node scripts/fetch.js
+      - name: seal details
+        if: always()
+        run: node scripts/seal-out.js fetch
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: fetch-sealed
+          path: ${{ runner.temp }}/fetch.sealed
+          retention-days: 14
+          if-no-files-found: ignore
+  test:
+    needs: fetch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      es_base: ${{ steps.stage.outputs.es_base }}
+      result: ${{ steps.run.outputs.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - id: stage
+        env:
+          MAIN_REPO: ${{ secrets.MAIN_REPO }}
+          MAIN_READ: ${{ secrets.MAIN_READ }}
+          BATCH: ${{ inputs.batch }}
+          HEAD_SHA: ${{ inputs.head }}
+          MASTER: ${{ needs.fetch.outputs.master }}
+          SERIES: ${{ needs.fetch.outputs.series }}
+        run: node scripts/stage.js
+      - id: run
+        run: node scripts/run-tests.js
+      - name: seal details
+        if: always()
+        run: node scripts/seal-out.js test
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: test-sealed
+          path: ${{ runner.temp }}/test.sealed
+          retention-days: 14
+          if-no-files-found: ignore
+  shadow:
+    needs: [fetch, test]
+    if: inputs.mode == 'dry'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: shadow
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - id: apply
+        env:
+          MODE: dry
+          MAIN_REPO: ${{ secrets.MAIN_REPO }}
+          MAIN_READ: ${{ secrets.MAIN_READ }}
+          BATCH: ${{ inputs.batch }}
+          HEAD_SHA: ${{ inputs.head }}
+          SERIES: ${{ needs.fetch.outputs.series }}
+          ES_BASE: ${{ needs.test.outputs.es_base }}
+          WORDLIST: ${{ secrets.WORDLIST }}
+          ES_NAME: ${{ vars.ES_NAME }}
+          ES_EMAIL: ${{ vars.ES_EMAIL }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/es-apply.js
+      - name: seal details
+        if: always()
+        run: node scripts/seal-out.js shadow
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: shadow-sealed
+          path: ${{ runner.temp }}/shadow.sealed
+          retention-days: 14
+          if-no-files-found: ignore
+  push:
+    needs: [fetch, test]
+    if: inputs.mode == 'push' && needs.test.outputs.result == 'pass'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: push
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - id: apply
+        env:
+          MODE: push
+          MAIN_REPO: ${{ secrets.MAIN_REPO }}
+          MAIN_READ: ${{ secrets.MAIN_READ }}
+          BATCH: ${{ inputs.batch }}
+          HEAD_SHA: ${{ inputs.head }}
+          SERIES: ${{ needs.fetch.outputs.series }}
+          ES_BASE: ${{ needs.test.outputs.es_base }}
+          WORDLIST: ${{ secrets.WORDLIST }}
+          ES_NAME: ${{ vars.ES_NAME }}
+          ES_EMAIL: ${{ vars.ES_EMAIL }}
+          ES_PUSH: ${{ secrets.ES_PUSH }}
+          MARK_KEY: ${{ secrets.MARK_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/es-apply.js
+      # the signed mark is not secret (it only proves the push happened); the verifier box posts it on the main-repo PR
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: success()
+        with:
+          name: mark
+          path: ${{ runner.temp }}/out/mark.txt
+          retention-days: 30
+      - name: seal details
+        if: always()
+        run: node scripts/seal-out.js push
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: push-sealed
+          path: ${{ runner.temp }}/push.sealed
+          retention-days: 14
+          if-no-files-found: ignore
