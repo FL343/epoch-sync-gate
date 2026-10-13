@@ -18,6 +18,7 @@ on:
       mode: { description: 'dry = shadow branch only, push = gated push', required: true, type: choice, options: [dry, push], default: dry }
       master: { description: 'rehearsal only (dry): main-repo commit to evaluate against; empty = current master', required: false, type: string, default: '' }
       es_base: { description: 'rehearsal only (dry): epoch-sync commit to apply the series on; empty = current main', required: false, type: string, default: '' }
+      legacy: { description: 'rehearsal only (dry): notes = read old free-text batch notes as notes', required: false, type: string, default: '' }
 permissions: {}
 concurrency:
   group: verify
@@ -48,6 +49,7 @@ jobs:
           MODE: ${{ inputs.mode }}
           MASTER_IN: ${{ inputs.master }}
           ES_BASE_IN: ${{ inputs.es_base }}
+          LEGACY_IN: ${{ inputs.legacy }}
         run: node scripts/fetch.js
       - name: seal details
         if: always()

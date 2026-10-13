@@ -6,7 +6,7 @@
 //      check runs, so a batch that needs cloud tests is held and goes to the maintainer instead).
 //   3. push mode only: the main repo landing bot (github-actions[bot]) must also have marked this head as es-wait.
 // Outputs: series (patch-series fingerprint), master (main-repo commit evaluated against).
-// Env: MAIN_REPO MAIN_READ BATCH PR HEAD_SHA MODE MASTER_IN ES_BASE_IN RUNNER_TEMP
+// Env: MAIN_REPO MAIN_READ BATCH PR HEAD_SHA MODE MASTER_IN ES_BASE_IN LEGACY_IN RUNNER_TEMP
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -27,6 +27,10 @@ V.finish(() => {
   if (masterIn && mode === 'push') throw new V.Hold('rehearsal-master-only-in-dry-mode');
   const esBaseIn = String(process.env.ES_BASE_IN || '').trim();
   if (esBaseIn && (!/^[0-9a-f]{40}$/.test(esBaseIn) || mode === 'push' || !masterIn)) throw new V.Hold('rehearsal-es-base-only-with-master-in-dry-mode');
+  // rehearsal of an already-landed batch only: pr 0 = the batch never had a PR; legacy=notes = read its old free-text
+  //   declaredLocal lines as notes (they predate the declared kinds). Both need a pinned master, i.e. dry mode.
+  const legacyNotes = String(process.env.LEGACY_IN || '') === 'notes';
+  if ((pr === '0' || legacyNotes) && !masterIn) throw new V.Hold('rehearsal-flags-only-with-master-in-dry-mode');
   fs.mkdirSync(OUT, { recursive: true });
 
   const dir = path.join(process.env.RUNNER_TEMP || '/tmp', 'main');
@@ -34,11 +38,9 @@ V.finish(() => {
     '+refs/heads/master:refs/remotes/origin/master',
     '+refs/heads/' + V.AUDIT_REF + ':refs/remotes/origin/' + V.AUDIT_REF,
     '+refs/heads/' + V.BACKLOG_REF + ':refs/remotes/origin/' + V.BACKLOG_REF,
-    '+refs/pull/' + pr + '/head:refs/remotes/pr/head',
     head,
-  ].concat(masterIn ? [masterIn] : []));
-  const prHead = V.git(dir, ['rev-parse', 'pr/head']).out;
-  if (mode === 'push' && prHead !== head) throw new V.Hold('pr-head-moved', 'PR head ' + prHead + ' != tested ' + head);
+  ].concat(pr !== '0' ? ['+refs/pull/' + pr + '/head:refs/remotes/pr/head'] : [], masterIn ? [masterIn] : []));
+  if (mode === 'push' && V.git(dir, ['rev-parse', 'pr/head']).out !== head) throw new V.Hold('pr-head-moved');
   const master = masterIn || V.git(dir, ['rev-parse', 'origin/master']).out;
 
   // 1. gate pins: current master gate files must match the deployed fingerprints
@@ -62,6 +64,10 @@ V.finish(() => {
   let input, res;
   try {
     input = LV.collect({ repo: dir, head, master, audit: 'origin/' + V.AUDIT_REF, backlog: 'origin/' + V.BACKLOG_REF });
+    if (legacyNotes && input.batch && Array.isArray(input.batch.declaredLocal)) {
+      input.batch.declared = (input.batch.declared || []).concat(input.batch.declaredLocal.map((t) => ({ kind: 'note', text: String(t) })));
+      delete input.batch.declaredLocal;
+    }
     res = LV.evaluate(input, rules);
   } finally { delete process.env.GIT_CONFIG_COUNT; delete process.env.GIT_CONFIG_KEY_0; delete process.env.GIT_CONFIG_VALUE_0; }
   fs.writeFileSync(path.join(OUT, 'gate-result.json'), JSON.stringify({ batch, head, master, res }, null, 2));

@@ -52,15 +52,55 @@ V.finish(() => {
   const am = V.git(es, ['-c', 'user.name=verify', '-c', 'user.email=verify@invalid', 'am', '-3', '-q'].concat(files), { ok: false });
   if (am.status !== 0) { V.git(es, ['am', '--abort'], { ok: false }); throw new V.Hold('series-does-not-apply'); }
 
+  // ledger replay inputs (user decision 10-13: replaying every recent cloud-test game before / after the series replaces the
+  //   maintainer's "run a real cron locally"): the replay tool from today's master (pinned like the gate) + epoch-sync without
+  //   the series (A) + the ledger records of each cloud-test game of the last REPLAY_DAYS days (one dir per run)
+  const rdir = path.join(W, 'replay');
+  fs.mkdirSync(path.join(rdir, 'tool'), { recursive: true });
+  fs.mkdirSync(path.join(rdir, 'in'), { recursive: true });
+  V.git(main, ['fetch', '-q', '--no-tags', '--filter=blob:none', 'origin', '+refs/heads/master:refs/remotes/origin/master', '+refs/heads/ci-cloud/pr-*:refs/remotes/origin/ci-cloud/pr-*'], { token, quiet: true });
+  const gate = JSON.parse(fs.readFileSync(path.join(ROOT, 'gate.json'), 'utf8'));
+  for (const f of ['infra/cloud-test/replay/cron-replay.js', 'infra/cloud-test/replay/fake-steam.js']) {
+    const r = V.git(main, ['show', 'origin/master:' + f], { token, buffer: true });
+    if (require('crypto').createHash('sha256').update(r.stdout).digest('hex') !== (gate.pins || {})[f]) throw new V.Hold('gate-drift', f);
+    fs.writeFileSync(path.join(rdir, 'tool', path.basename(f)), r.stdout);
+  }
+  const days = Math.max(1, Math.min(14, +(process.env.REPLAY_DAYS || 4)));
+  const runs = [];
+  for (const ref of V.git(main, ['for-each-ref', '--format=%(refname:short)', 'refs/remotes/origin/ci-cloud/pr-*']).out.split('\n').filter(Boolean)) {
+    const pr = ref.split('/').pop().replace(/^pr-/, '');   // dir name <pr>-<sha8>-<preset> (replay-cmp reads the preset after the 2nd dash)
+    for (const l of V.git(main, ['log', '--since=' + days + '.days', '--format=%H %ct %s', ref]).out.split('\n').filter(Boolean)) {
+      const [sha, ct] = l.split(' ');
+      const preset = (/^\S+ \S+ cloud (\S+) /.exec(l) || [])[1];
+      if (!preset || !/^[a-z0-9]+$/.test(preset)) continue;
+      const blobs = V.git(main, ['ls-tree', sha]).out.split('\n').map((x) => /^\d+ blob ([0-9a-f]{40})\t(ledger-raw-[\w.-]+\.txt)$/.exec(x)).filter(Boolean);
+      if (blobs.length) runs.push({ pr, sha, ct: +ct, preset, blobs: blobs.map((m) => ({ oid: m[1], name: m[2] })) });
+    }
+  }
+  runs.sort((a, b) => b.ct - a.ct);
+  const picked = runs.slice(0, 300);
+  const oids = picked.reduce((a, r) => a.concat(r.blobs.map((b) => b.oid)), []);
+  if (oids.length) V.git(main, ['fetch', '-q', '--no-tags', '--no-write-fetch-head', '--filter=blob:none', '--stdin', 'origin'], { token, input: oids.join('\n') + '\n', quiet: true });
+  for (const r of picked) {
+    const d = path.join(rdir, 'in', r.pr + '-' + r.sha.slice(0, 8) + '-' + r.preset);
+    fs.mkdirSync(d, { recursive: true });
+    for (const b of r.blobs) fs.writeFileSync(path.join(d, b.name), V.git(main, ['cat-file', 'blob', b.oid], { token, buffer: true }).stdout);
+  }
+  const esA = path.join(W, 'es-a');
+  V.run('git', ['clone', '-q', es, esA]);
+  V.git(esA, ['checkout', '-q', '--detach', base]);
+
   // test driver + shared module for the unprivileged user
   const vt = path.join(W, 'vt');
   fs.mkdirSync(vt, { recursive: true });
   fs.copyFileSync(path.join(ROOT, 'lib', 'es-common.js'), path.join(vt, 'es-common.js'));
   fs.copyFileSync(path.join(__dirname, 'esrun.js'), path.join(vt, 'esrun.js'));
+  fs.copyFileSync(path.join(__dirname, 'replay-cmp.js'), path.join(vt, 'replay-cmp.js'));
   fs.mkdirSync(path.join(W, 'logs'), { recursive: true });
+  console.log('replay inputs: ' + picked.length + ' cloud-test game(s) from the last ' + days + ' day(s)');
 
   V.run('sudo', ['useradd', '-m', '-s', '/bin/bash', 'vtest']);
-  V.run('sudo', ['chown', '-R', 'vtest:vtest', path.join(W, 'main'), es, path.join(W, 'logs')]);
+  V.run('sudo', ['chown', '-R', 'vtest:vtest', path.join(W, 'main'), es, esA, rdir, path.join(W, 'logs')]);
   V.run('sudo', ['chown', '-R', 'root:root', vt, pdir]);
   V.run('sudo', ['chmod', '-R', 'a+rX', vt]);
   V.run('sudo', ['-u', 'vtest', 'ln', '-s', es, '/home/vtest/epoch-sync']);

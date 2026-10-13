@@ -38,6 +38,12 @@ const pits = ci.code === 0 ? asTester(mvp, 'node', ['native/eac-guard/build-pits
 const ta = (ci.code === 0 && pits.code === 0) ? asTester(mvp, 'npm', ['run', 'test:all'], { GMT_SKIP_ASSET_CHECKS: '1', CRON_DIR: path.join(W, 'es'), GMT_EPOCH_SYNC: path.join(W, 'es') }, 'test-all.log', 45) : { code: 'skipped', stdout: '' };
 res.npmci = ci.code; res.pits = pits.code;
 res.testall = { code: ta.code, sec: ta.sec, line: lastLine(ta.stdout, /^\[test:all\] \d+\/\d+ /).replace(/[^\x20-\x7e]+/g, ' ').trim() };
+// 4. ledger replay of recent cloud-test games, epoch-sync before / after the series (reported separately from pass/fail:
+//    a settlement change is not a test failure but the gate holds it for the maintainer)
+const rp = asTester(W, 'node', [path.join(W, 'vt', 'replay-cmp.js'), path.join(W, 'replay'), path.join(W, 'es-a'), path.join(W, 'es'), path.join(W, 'logs', 'replay.json')], {}, 'replay.log', 40);
+let rj = null;
+try { rj = JSON.parse(fs.readFileSync(path.join(W, 'logs', 'replay.json'), 'utf8')); fs.copyFileSync(path.join(W, 'logs', 'replay.json'), path.join(OUT, 'replay.json')); } catch (e) { rj = null; }
+res.replay = rj ? { code: rp.code, runs: rj.runs, same: rj.same, changes: rj.changes.length, notes: rj.notes.length, noResult: rj.noResult.length } : { code: rp.code, missing: true };
 
 const pass = res.es.code === 0 && res.check.every((c) => c.code === 0) && ci.code === 0 && pits.code === 0 && ta.code === 0;
 res.pass = pass;
@@ -45,5 +51,6 @@ fs.writeFileSync(path.join(OUT, 'test-result.json'), JSON.stringify(res, null, 2
 console.log('epoch-sync tests: ' + (res.es.line || 'exit ' + res.es.code));
 console.log('syntax checks: ' + res.check.map((c) => c.file + '=' + c.code).join(' '));
 console.log('npm ci=' + ci.code + ' pits=' + pits.code + ' test:all: ' + (res.testall.line || 'exit ' + ta.code));
+console.log('ledger replay: ' + (res.replay.missing ? 'no result (exit ' + res.replay.code + ')' : res.replay.runs + ' game(s), ' + res.replay.same + ' same, ' + res.replay.changes + ' changed, ' + res.replay.notes + ' with new watch lines'));
 console.log('result: ' + (pass ? 'pass' : 'fail'));
 V.setOutput({ result: pass ? 'pass' : 'fail' });
