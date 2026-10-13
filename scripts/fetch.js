@@ -70,7 +70,9 @@ V.finish(() => {
     }
     res = LV.evaluate(input, rules);
   } finally { delete process.env.GIT_CONFIG_COUNT; delete process.env.GIT_CONFIG_KEY_0; delete process.env.GIT_CONFIG_VALUE_0; }
-  fs.writeFileSync(path.join(OUT, 'gate-result.json'), JSON.stringify({ batch, head, master, res }, null, 2));
+  // testedShas: the batch head plus the commits that only differ from it in the batch-notes directory (the final review is
+  //   committed after the cloud tests, so its head= is usually one of these) - the reviewer needs them to check the final review
+  fs.writeFileSync(path.join(OUT, 'gate-result.json'), JSON.stringify({ batch, head, master, testedShas: input.testedShas || [], res }, null, 2));
   if (!input.batch || input.batch.batch !== batch) throw new V.Hold('batch-id-mismatch');
   if (res.verdict !== 'es-wait') throw new V.Hold('gate-' + res.verdict, (res.reasons || []).concat(res.local || []).join('\n'));
 
