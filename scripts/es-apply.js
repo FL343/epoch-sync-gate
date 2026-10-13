@@ -3,10 +3,11 @@
 // and text checks. Same order as the maintainer's land-batch:
 //   series fingerprint == the one tested -> epoch-sync clone -> git am -3 -> author = public identity + drop the two
 //   AI trailer lines -> commit message checks -> public-data checks over the whole tree (private word list)
-//   dry : push the result to this repo as shadow/<batch> (the "would-be merge" kept for comparison)
+//   dry : write the result as a git bundle (epoch-sync base..result) + shadow.json into RUNNER_TEMP/shadow-pub (uploaded as an
+//         artifact: the "would-be merge" kept for comparison; never pushed as a branch of this repo)
 //   push: epoch-sync runs must be green -> only bot state commits may have arrived since the tested base ->
 //         push main (rebase over new state commits, at most 3 times) -> sign the "es landed" mark -> artifact mark.txt
-// Env: MODE MAIN_REPO MAIN_READ BATCH HEAD_SHA SERIES ES_BASE WORDLIST ES_NAME ES_EMAIL GITHUB_TOKEN GITHUB_REPOSITORY
+// Env: MODE MAIN_REPO MAIN_READ BATCH HEAD_SHA SERIES ES_BASE WORDLIST ES_NAME ES_EMAIL GITHUB_TOKEN (push mode: reads epoch-sync run status)
 //      push only: ES_PUSH MARK_KEY
 const fs = require('fs');
 const path = require('path');
@@ -65,12 +66,14 @@ V.finish(() => {
   const nCommits = +V.git(es, ['rev-list', '--count', before + '..HEAD']).out;
 
   if (mode === 'dry') {
-    const auth = V.basicAuth(V.need('GITHUB_TOKEN', /^\S{20,}$/));
-    const repo = V.need('GITHUB_REPOSITORY', /^[\w.-]+\/[\w.-]+$/);
-    V.git(es, ['-c', 'http.extraheader=' + auth, 'push', '-q', '-f', 'https://github.com/' + repo + '.git', 'HEAD:refs/heads/shadow/' + batch]);
+    const pub = path.join(tmp, 'shadow-pub');
+    fs.mkdirSync(pub, { recursive: true });
+    V.git(es, ['bundle', 'create', path.join(pub, batch + '.bundle'), esBase + '..HEAD']);
     const shadow = V.git(es, ['rev-parse', 'HEAD']).out;
-    fs.writeFileSync(path.join(OUT, 'shadow.json'), JSON.stringify({ batch, head, series, esBase, shadow, commits: nCommits, patchIds, stripped }, null, 2));
-    console.log('shadow/' + batch + ' = ' + shadow.slice(0, 12) + ' (' + nCommits + ' commit(s) on ' + esBase.slice(0, 8) + ', ' + stripped + ' trailer line(s) dropped)');
+    const info = JSON.stringify({ batch, head, series, esBase, shadow, tree: V.git(es, ['rev-parse', 'HEAD^{tree}']).out, commits: nCommits, patchIds, stripped }, null, 2);
+    fs.writeFileSync(path.join(OUT, 'shadow.json'), info);
+    fs.writeFileSync(path.join(pub, 'shadow.json'), info);
+    console.log('shadow ' + batch + ' = ' + shadow.slice(0, 12) + ' (' + nCommits + ' commit(s) on ' + esBase.slice(0, 8) + ', ' + stripped + ' trailer line(s) dropped; bundle artifact)');
     V.setOutput({ shadow, hold: '' });
     return;
   }

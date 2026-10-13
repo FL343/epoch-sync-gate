@@ -3,7 +3,9 @@
 # no caches (a test job running untrusted code must not be able to poison anything a later job reads).
 #   fetch  : gate verdict must be es-wait (gate code pinned by gate.json); no batch code runs.
 #   test   : batch code runs as an unprivileged user without sudo; public log = counts; full logs sealed.
-#   shadow : dry mode - the would-be epoch-sync result is pushed here as shadow/<batch> for comparison.
+#   shadow : dry mode - the would-be epoch-sync result is uploaded as a git bundle artifact (shadow/<batch>.bundle) for comparison;
+#            nothing is pushed here (epoch-sync history carries workflow files, and pushing them as a branch of this repo
+#            could start them with this repo's secrets), so no job has write access to this repo.
 #   push   : push mode - waits for approval of environment "push" (required reviewer); only then the push key exists.
 name: verify
 run-name: "verify ${{ inputs.batch }} ${{ inputs.head }} ${{ inputs.mode }}"
@@ -15,6 +17,7 @@ on:
       head: { description: 'tested commit (40 hex)', required: true, type: string }
       mode: { description: 'dry = shadow branch only, push = gated push', required: true, type: choice, options: [dry, push], default: dry }
       master: { description: 'rehearsal only (dry): main-repo commit to evaluate against; empty = current master', required: false, type: string, default: '' }
+      es_base: { description: 'rehearsal only (dry): epoch-sync commit to apply the series on; empty = current main', required: false, type: string, default: '' }
 permissions: {}
 concurrency:
   group: verify
@@ -44,6 +47,7 @@ jobs:
           HEAD_SHA: ${{ inputs.head }}
           MODE: ${{ inputs.mode }}
           MASTER_IN: ${{ inputs.master }}
+          ES_BASE_IN: ${{ inputs.es_base }}
         run: node scripts/fetch.js
       - name: seal details
         if: always()
@@ -79,6 +83,7 @@ jobs:
           HEAD_SHA: ${{ inputs.head }}
           MASTER: ${{ needs.fetch.outputs.master }}
           SERIES: ${{ needs.fetch.outputs.series }}
+          ES_BASE_IN: ${{ inputs.es_base }}
         run: node scripts/stage.js
       - id: run
         run: node scripts/run-tests.js
@@ -99,7 +104,7 @@ jobs:
     timeout-minutes: 15
     environment: shadow
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -119,8 +124,14 @@ jobs:
           WORDLIST: ${{ secrets.WORDLIST }}
           ES_NAME: ${{ vars.ES_NAME }}
           ES_EMAIL: ${{ vars.ES_EMAIL }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/es-apply.js
+      # the bundle is epoch-sync main + the series after the public-data checks passed: public content, not sealed
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: success()
+        with:
+          name: shadow
+          path: ${{ runner.temp }}/shadow-pub
+          retention-days: 30
       - name: seal details
         if: always()
         run: node scripts/seal-out.js shadow

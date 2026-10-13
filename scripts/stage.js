@@ -6,7 +6,7 @@
 //   /opt/vwork/vt     copy of lib/es-common.js + the es test driver
 //   /home/vtest/epoch-sync -> /opt/vwork/es   (some main-repo tests read ~/epoch-sync)
 // Outputs: es_base (epoch-sync commit the series was tested on)
-// Env: MAIN_REPO MAIN_READ BATCH HEAD_SHA MASTER SERIES RUNNER_TEMP
+// Env: MAIN_REPO MAIN_READ BATCH HEAD_SHA MASTER SERIES ES_BASE_IN RUNNER_TEMP
 const fs = require('fs');
 const path = require('path');
 const V = require('./vlib.js');
@@ -45,6 +45,9 @@ V.finish(() => {
   // epoch-sync (public) + series
   const es = path.join(W, 'es');
   V.run('git', ['clone', '-q', V.ES_REPO, es]);
+  // rehearsal of an already-landed batch (fetch allows this only in dry mode with a pinned master): epoch-sync as it was then
+  const esBaseIn = String(process.env.ES_BASE_IN || '').trim();
+  if (esBaseIn) { if (!/^[0-9a-f]{40}$/.test(esBaseIn)) throw new V.Hold('bad-es-base'); V.git(es, ['checkout', '-q', '-B', 'main', esBaseIn]); }
   const base = V.git(es, ['rev-parse', 'HEAD']).out;
   const am = V.git(es, ['-c', 'user.name=verify', '-c', 'user.email=verify@invalid', 'am', '-3', '-q'].concat(files), { ok: false });
   if (am.status !== 0) { V.git(es, ['am', '--abort'], { ok: false }); throw new V.Hold('series-does-not-apply'); }

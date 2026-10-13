@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "deployedFrom": "2f2642a7618c61c187ef045f6474c83e7327ca2d",
+  "deployedFrom": "1daa7edfc5ec66cec2964e436a691367317ec8ab",
   "pins": {
     "infra/workbench/land-verify.js": "30cc11d6bd9c3ecc6241c816f3f7c6e9ca4b6ade396f04889e347b9b8058293b",
     "infra/workbench/land-rules.json": "da95f93f64e4cc926fed05bbee80f60ad3ff0c10577914fa870888b609e5e797",

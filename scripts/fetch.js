@@ -6,7 +6,7 @@
 //      check runs, so a batch that needs cloud tests is held and goes to the maintainer instead).
 //   3. push mode only: the main repo landing bot (github-actions[bot]) must also have marked this head as es-wait.
 // Outputs: series (patch-series fingerprint), master (main-repo commit evaluated against).
-// Env: MAIN_REPO MAIN_READ BATCH PR HEAD_SHA MODE MASTER_IN RUNNER_TEMP
+// Env: MAIN_REPO MAIN_READ BATCH PR HEAD_SHA MODE MASTER_IN ES_BASE_IN RUNNER_TEMP
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -25,6 +25,8 @@ V.finish(() => {
   const masterIn = String(process.env.MASTER_IN || '').trim();
   if (masterIn && !/^[0-9a-f]{40}$/.test(masterIn)) throw new V.Hold('bad-master-input');
   if (masterIn && mode === 'push') throw new V.Hold('rehearsal-master-only-in-dry-mode');
+  const esBaseIn = String(process.env.ES_BASE_IN || '').trim();
+  if (esBaseIn && (!/^[0-9a-f]{40}$/.test(esBaseIn) || mode === 'push' || !masterIn)) throw new V.Hold('rehearsal-es-base-only-with-master-in-dry-mode');
   fs.mkdirSync(OUT, { recursive: true });
 
   const dir = path.join(process.env.RUNNER_TEMP || '/tmp', 'main');
