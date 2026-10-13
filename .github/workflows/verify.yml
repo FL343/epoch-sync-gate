@@ -20,9 +20,9 @@ on:
       es_base: { description: 'rehearsal only (dry): epoch-sync commit to apply the series on; empty = current main', required: false, type: string, default: '' }
       legacy: { description: 'rehearsal only (dry): notes = read old free-text batch notes as notes', required: false, type: string, default: '' }
 permissions: {}
-concurrency:
-  group: verify
-  cancel-in-progress: false
+# No workflow-level concurrency group: GitHub keeps one running + one pending per group and cancels older pending runs
+# (rehearsal 10-13 lost two of five). The verifier box dispatches one run at a time; two pushes racing would still be safe
+# (the second sees the first's commits as non-state commits since its tested base and holds).
 jobs:
   fetch:
     runs-on: ubuntu-24.04
