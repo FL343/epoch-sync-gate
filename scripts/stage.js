@@ -80,7 +80,8 @@ V.finish(() => {
   runs.sort((a, b) => b.ct - a.ct);
   const picked = runs.slice(0, 300);
   const oids = picked.reduce((a, r) => a.concat(r.blobs.map((b) => b.oid)), []);
-  if (oids.length) V.git(main, ['fetch', '-q', '--no-tags', '--no-write-fetch-head', '--filter=blob:none', '--stdin', 'origin'], { token, input: oids.join('\n') + '\n', quiet: true });
+  // same shape as git's own promisor fetch (noop negotiation); without it the server answers "did not send all necessary objects"
+  if (oids.length) V.git(main, ['-c', 'fetch.negotiationAlgorithm=noop', 'fetch', '-q', '--no-tags', '--no-write-fetch-head', '--recurse-submodules=no', '--filter=blob:none', '--stdin', 'origin'], { token, input: oids.join('\n') + '\n', quiet: true });
   for (const r of picked) {
     const d = path.join(rdir, 'in', r.pr + '-' + r.sha.slice(0, 8) + '-' + r.preset);
     fs.mkdirSync(d, { recursive: true });
