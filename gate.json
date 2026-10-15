@@ -1,9 +1,9 @@
 {
   "v": 1,
-  "deployedFrom": "60352eab432d3530ec8ae069a22b4da543deb6c8",
+  "deployedFrom": "49038c868049a98a587868d7f6e0564a49f1aa55",
   "pins": {
-    "infra/workbench/land-verify.js": "76d8a27fac35a6b13ad5b921568f1aed19db871840fe03d76521077ac2ed45c9",
-    "infra/workbench/land-rules.json": "34bca3ebe86ceb0f586bdcd7144ea0754b65053f2c0ffd35f5738b84f98a2cee",
+    "infra/workbench/land-verify.js": "544f60373994984aa6834aa805e75912edff397dd0089d785f0ce39795b33db2",
+    "infra/workbench/land-rules.json": "72b67bf16e874cd53b49ce3734e71cfb486c4862d5d77e0bb7ecef842ebdf910",
     "infra/workbench/land-keys.json": "de1e68bd3950252acbf44519d61f2cba120fb7a18337752abba89048af3fdc15",
     "infra/workbench/es-common.js": "539643b1bd4684c0778870d9271fdc847d266796f790ca693e1e8276b75f750e",
     "infra/cloud-test/ci/cloud-rules.js": "d476bd91e06fc1d24855c901bf7fbe14f79e0bf6dddf12ac41cafe338e9630f0",
