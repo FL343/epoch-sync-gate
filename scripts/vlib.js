@@ -82,4 +82,17 @@ function seriesEntries(dir, head, b, token) {
   });
 }
 
-module.exports = { mainRepo, ES_REPO, AUDIT_REF, BACKLOG_REF, basicAuth, run, git, need, setOutput, Hold, finish, mainClone, readBatch, seriesEntries };
+// O612: time limits of the epoch-sync test step and of the whole test job (GitHub expressions cannot add, so the fetch job
+//   outputs both). The verifier box estimates the step from the last measured per-file times (sum / lanes x 1.3 + 10 minutes)
+//   and passes it in as input es_min; it is clamped here, by fetch.js and again by run-tests.js (a bad or missing value = the
+//   floor, i.e. the old fixed 60 minutes). The job limit keeps the old 60 minutes for the other steps on top of the step limit
+//   and never goes below the old 120; ceil + rest = 360 = the most a GitHub-hosted job may run.
+const ES_LIMIT = { floor: 60, ceil: 300, rest: 60, jobFloor: 120, jobMax: 360, lanes: 2 };
+function esLimits(raw) {
+  const t = String(raw === undefined || raw === null ? '' : raw).trim();
+  const esMin = /^\d{1,4}$/.test(t) ? Math.min(ES_LIMIT.ceil, Math.max(ES_LIMIT.floor, +t)) : ES_LIMIT.floor;
+  const jobMin = Math.min(ES_LIMIT.jobMax, Math.max(ES_LIMIT.jobFloor, esMin + ES_LIMIT.rest));
+  return { esMin, jobMin };
+}
+
+module.exports = { mainRepo, ES_REPO, AUDIT_REF, BACKLOG_REF, basicAuth, run, git, need, setOutput, Hold, finish, mainClone, readBatch, seriesEntries, ES_LIMIT, esLimits };

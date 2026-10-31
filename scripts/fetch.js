@@ -5,8 +5,9 @@
 //   2. the gate must say "es-wait" for this batch evaluated without cloud-test results (fine-grained tokens cannot read
 //      check runs, so a batch that needs cloud tests is held and goes to the maintainer instead).
 //   3. push mode only: the main repo landing bot (github-actions[bot]) must also have marked this head as es-wait.
-// Outputs: series (patch-series fingerprint), master (main-repo commit evaluated against).
-// Env: MAIN_REPO MAIN_READ BATCH PR HEAD_SHA MODE MASTER_IN ES_BASE_IN LEGACY_IN RUNNER_TEMP
+// Outputs: series (patch-series fingerprint), master (main-repo commit evaluated against), es_min / job_min (time limits of
+//   the epoch-sync test step and of the test job, from input es_min clamped by vlib.esLimits - O612).
+// Env: MAIN_REPO MAIN_READ BATCH PR HEAD_SHA MODE MASTER_IN ES_BASE_IN LEGACY_IN ES_MIN_IN RUNNER_TEMP
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -85,6 +86,9 @@ V.finish(() => {
       new RegExp('<!--\\s*gmt-land head=' + head + ' master=[0-9a-f]{40} armed=[01] state=es-wait\\s*-->').test(c.body || ''));
     if (!ok) throw new V.Hold('bot-not-es-wait');
   }
-  console.log('gate: es-wait · series ' + res.seriesHash.slice(0, 12) + ' · master ' + master.slice(0, 8));
-  V.setOutput({ series: res.seriesHash, master, hold: '' });
+  // O612: the verifier box's estimate for the epoch-sync step (from the last measured per-file times); missing or out of
+  //   range = clamped, never a hold (a missing estimate just means the old fixed 60 minutes)
+  const lim = V.esLimits(process.env.ES_MIN_IN);
+  console.log('gate: es-wait · series ' + res.seriesHash.slice(0, 12) + ' · master ' + master.slice(0, 8) + ' · epoch-sync step limit ' + lim.esMin + ' min, test job ' + lim.jobMin + ' min');
+  V.setOutput({ series: res.seriesHash, master, hold: '', es_min: lim.esMin, job_min: lim.jobMin });
 }, DETAIL);

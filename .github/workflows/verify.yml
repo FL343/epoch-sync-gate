@@ -19,6 +19,7 @@ on:
       master: { description: 'rehearsal only (dry): main-repo commit to evaluate against; empty = current master', required: false, type: string, default: '' }
       es_base: { description: 'rehearsal only (dry): epoch-sync commit to apply the series on; empty = current main', required: false, type: string, default: '' }
       legacy: { description: 'rehearsal only (dry): notes = read old free-text batch notes as notes', required: false, type: string, default: '' }
+      es_min: { description: 'epoch-sync test step limit in minutes, estimated by the verifier box from the last measured per-file times; clamped to 60..300, empty = 60', required: false, type: string, default: '' }
 permissions: {}
 # No workflow-level concurrency group: GitHub keeps one running + one pending per group and cancels older pending runs
 # (rehearsal 10-13 lost two of five). The verifier box dispatches one run at a time; two pushes racing would still be safe
@@ -32,6 +33,8 @@ jobs:
     outputs:
       series: ${{ steps.f.outputs.series }}
       master: ${{ steps.f.outputs.master }}
+      es_min: ${{ steps.f.outputs.es_min }}
+      job_min: ${{ steps.f.outputs.job_min }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -50,6 +53,7 @@ jobs:
           MASTER_IN: ${{ inputs.master }}
           ES_BASE_IN: ${{ inputs.es_base }}
           LEGACY_IN: ${{ inputs.legacy }}
+          ES_MIN_IN: ${{ inputs.es_min }}
         run: node scripts/fetch.js
       - name: seal details
         if: always()
@@ -64,7 +68,9 @@ jobs:
   test:
     needs: fetch
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    # O612: the epoch-sync step limit grows with the measured test times, so the job limit is computed by the fetch job
+    #   (step limit + 60 minutes for the other steps, 120..360; expressions cannot add)
+    timeout-minutes: ${{ fromJSON(needs.fetch.outputs.job_min || '120') }}
     permissions:
       contents: read
     outputs:
@@ -88,6 +94,9 @@ jobs:
           ES_BASE_IN: ${{ inputs.es_base }}
         run: node scripts/stage.js
       - id: run
+        env:
+          ES_MIN: ${{ needs.fetch.outputs.es_min }}
+          ES_JOBS: '2'
         run: node scripts/run-tests.js
       - name: seal details
         if: always()

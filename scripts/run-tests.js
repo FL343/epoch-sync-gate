@@ -2,7 +2,7 @@
 // run-tests.js - job "test", untrusted part. Every command that executes batch code runs as the unprivileged
 // "vtest" user with a scrubbed environment; this wrapper (runner user) only records exit codes, so a test cannot
 // rewrite its own verdict. Public log: counts only. Full logs: RUNNER_TEMP/out (sealed afterwards).
-//   1. epoch-sync test/*.js x4 clocks (esrun.js)
+//   1. epoch-sync test/*.js x4 clocks (esrun.js; two files at a time, step limit from the fetch job - O612)
 //   2. node --check validate.js / trueskill.js (what the private pre-push hook ran)
 //   3. main repo test:all on the merged tree, with the patched epoch-sync as CRON_DIR (both halves together)
 // Outputs: result=pass|fail
@@ -39,9 +39,12 @@ function asTester(cwd, cmd, args, extraEnv, logName, timeoutMin, step) {
 const lastLine = (s, re) => { const l = String(s).split('\n').filter((x) => re.test(x)); return l.length ? l[l.length - 1].trim() : ''; };
 
 const res = {};
-// 1. epoch-sync tests
-const es = asTester(W, 'node', [path.join(W, 'vt', 'esrun.js'), path.join(W, 'es'), path.join(W, 'logs', 'es.json')], {}, 'es-tests.log', 60, 'es');
-res.es = { code: es.code, sec: es.sec, line: lastLine(es.stdout, /^epoch-sync tests: \d+ \/ \d+ green$/) };
+// 1. epoch-sync tests, ES_JOBS files at a time; the step limit ES_MIN comes from the fetch job (estimated by the verifier box
+//    from the last measured per-file times, clamped there and again here - O612; before it was a fixed 60 minutes)
+const esMin = V.esLimits(process.env.ES_MIN).esMin;
+const esJobs = Math.max(1, Math.min(4, parseInt(process.env.ES_JOBS, 10) || V.ES_LIMIT.lanes));
+const es = asTester(W, 'node', [path.join(W, 'vt', 'esrun.js'), path.join(W, 'es'), path.join(W, 'logs', 'es.json')], { ES_JOBS: String(esJobs) }, 'es-tests.log', esMin, 'es');
+res.es = { code: es.code, sec: es.sec, line: lastLine(es.stdout, /^epoch-sync tests: \d+ \/ \d+ green$/), min: esMin, jobs: esJobs };
 try { fs.copyFileSync(path.join(W, 'logs', 'es.json'), path.join(OUT, 'es.json')); } catch (e) { /* missing = failed early */ }
 // 2. syntax checks the private hook ran
 res.check = ['validate.js', 'trueskill.js'].map((f) => ({ file: f, code: asTester(path.join(W, 'es'), 'node', ['--check', f], {}, 'check-' + f + '.log', 2, 'check').code }));
@@ -65,7 +68,7 @@ const pass = res.es.code === 0 && res.check.every((c) => c.code === 0) && ci.cod
 res.pass = pass;
 if (timedOut) res.timeout = timedOut;
 fs.writeFileSync(path.join(OUT, 'test-result.json'), JSON.stringify(res, null, 2));
-console.log('epoch-sync tests: ' + (res.es.line || 'exit ' + res.es.code));
+console.log('epoch-sync tests: ' + (res.es.line || 'exit ' + res.es.code) + ' (' + es.sec + ' s of the ' + esMin + ' minute limit, ' + esJobs + ' at a time)');
 console.log('syntax checks: ' + res.check.map((c) => c.file + '=' + c.code).join(' '));
 console.log('npm ci=' + ci.code + ' pits=' + pits.code + ' test:all: ' + (res.testall.line || 'exit ' + ta.code));
 console.log('ledger replay: ' + (res.replay.missing ? 'no result (exit ' + res.replay.code + ')' : res.replay.runs + ' game(s), ' + res.replay.same + ' same, ' + res.replay.changes + ' changed, ' + res.replay.notes + ' with new watch lines'));
