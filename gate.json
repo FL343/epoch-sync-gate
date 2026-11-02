@@ -1,8 +1,8 @@
 {
   "v": 1,
-  "deployedFrom": "c195dbd05c8db6a6effc88ed8d5c659b04de2ef7",
+  "deployedFrom": "669a8c932c7832c5752cd53cc4fd3f2d4bd75cfe",
   "pins": {
-    "infra/workbench/land-verify.js": "ba38b097680962d6e48fc6f5a5d1ba1eaa38c250e458651b4f9457b2fb7df60e",
+    "infra/workbench/land-verify.js": "aa8dca562a5364cf161127f489361abdaf2bfd44ce75fb0c3f273a305bd49311",
     "infra/workbench/land-rules.json": "fe2808fa72da57607e2210a2e7fd8852036cd56c66197bd4f66031469410839f",
     "infra/workbench/land-keys.json": "de1e68bd3950252acbf44519d61f2cba120fb7a18337752abba89048af3fdc15",
     "infra/workbench/es-common.js": "a47c25c260a9eb1be721e869e45610958168e07311860698814ee33465de902c",
