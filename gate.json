@@ -1,12 +1,12 @@
 {
   "v": 1,
-  "deployedFrom": "dfb0b2a481e57ff20b157f7dd977c2da662176bd",
+  "deployedFrom": "4ee599e0bf68a318c0a55993f4ad26e21f2dc772",
   "pins": {
-    "infra/workbench/land-verify.js": "81601cc63c2e101aa4f5d1b9df312cfda106ab55c40f9f2fc6c7ac9538dabdfd",
-    "infra/workbench/land-rules.json": "e183384f6abe8826b0d61423845204ff59be7fd16fcba01149eb27b2e343edee",
+    "infra/workbench/land-verify.js": "1967824ae0378a0c69d20cb11e3ef03d000d2074d1e69dcd344076aac27b0c42",
+    "infra/workbench/land-rules.json": "5c224c9e035791392b9c04f37529473e2225cc071e5d114c5798e03ded12ea8d",
     "infra/workbench/land-keys.json": "de1e68bd3950252acbf44519d61f2cba120fb7a18337752abba89048af3fdc15",
     "infra/workbench/es-common.js": "a47c25c260a9eb1be721e869e45610958168e07311860698814ee33465de902c",
-    "infra/cloud-test/ci/cloud-rules.js": "46fc167781f30f18b8dad2f9ab285ef8fbf9e0bdf964d47bed7fa77edb4a5242",
+    "infra/cloud-test/ci/cloud-rules.js": "7749fc9eb987cf812457fc7026e81ebad79a021e1a628477c6d34d4b4966132e",
     "infra/cloud-test/replay/cron-replay.js": "2c9180d5a05baae47b008a1784251395a651e89ed1ae26121113cde5ffcfde4d",
     "infra/cloud-test/replay/fake-steam.js": "797808cb9f9fe426c637fe8de0a314ef64f42404eee091f51e4f990e3ecc6c26"
   },
