@@ -60,7 +60,12 @@ V.finish(() => {
   if (msg.length) throw new V.Hold('commit-message-not-public', msg.join('\n'));
   const tracked = V.git(es, ['ls-files', '-z']).out.split('\0').filter(Boolean);
   const data = ES.publicDataProblems(tracked.map((p) => ({ path: p, text: fs.readFileSync(path.join(es, p), 'utf8') })), wordRe);
-  if (data.length) throw new V.Hold('public-data-check', data.length + ' finding(s)');   // never print the lines: they would publish the word list hits
+  // O807 / M673: a hit only in a file the batch never touched (a bot state commit on main) is an outside cause -> public-data-foreign
+  //   (the verifier retries it, bounded); a hit in a file the batch changed stays public-data-check (the batch's own problem)
+  const touched = V.git(es, ['diff', '--name-only', '-z', before, 'HEAD']).out.split('\0').filter(Boolean);
+  const split = ES.splitDataFindings(data, touched);
+  if (split.inBatch.length) throw new V.Hold('public-data-check', split.inBatch.length + ' finding(s)');   // never print the lines: they would publish the word list hits
+  if (split.foreign.length) throw new V.Hold('public-data-foreign', split.foreign.length + ' finding(s) outside the batch');
   const pid = V.run('git', ['-C', es, 'patch-id', '--stable'], { input: V.git(es, ['log', '-p', '--reverse', before + '..HEAD']).out });
   const patchIds = String(pid.stdout || '').split('\n').map((l) => l.split(' ')[0]).filter(Boolean);
   const nCommits = +V.git(es, ['rev-list', '--count', before + '..HEAD']).out;
